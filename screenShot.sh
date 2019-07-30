@@ -19,13 +19,24 @@ fullscreen="FullScreen"
 selection="Seleceted Area"
 circular="Cicle selection"
 cptoclip="Copy to clipboard"
+tempDir="$HOME/Pictures/.tmp"
+picDir="$HOME/Pictures/"
+
+trap "echo -e \"Exiting \n\"; rm -f $tempDir/*; exit 1" SIGINT SIGTERM SIGSTOP
 
 ## SAVE THE IMAGE ##
 
 saveImage()
 {
-	si=$(zenity --entry --text "Save Image" --title "$save" 2>/dev/null)
+	si=$(zenity --entry --text "Save Image as:" --title "$save" 2>/dev/null)
 	imageName=`echo "${si}.png"`
+	cd $picDir
+	if [ ! -e "$imageName" ] && [ -n  "$si" ]
+	then
+		mv $tempDir/tmp.png $picDir/"$imageName" >/dev/null 2>&1
+	else
+		echo "File Already Exist or no name was provided"
+	fi
 }
 
 ## CIRCLE SELECTION ##
@@ -42,18 +53,18 @@ saveImage()
 circle()
 {
 	xclip -i /dev/null
-	output=~/Pictures/tmp.png
-	temp_screenshot=~/Pictures/tmp.png
-	STATE1=$(xinput --query-state 10 | grep 'button\[' | sort)
+	output="$tempDir/tmp.png"
+	temp_screenshot="$tempDir/tmp.png"
+	STATE1=$(xinput --query-state 12 | grep 'button\[' | sort)
 	while true; do
-		STATE2=$(xinput --query-state 10 | grep 'button\[' | sort)
+		STATE2=$(xinput --query-state 12 | grep 'button\[' | sort)
 		sleep 0.05
 		i=$(comm -13 <(echo "$STATE1") <(echo "$STATE2"))
 		STATE1=$STATE2
 		var=$(echo $i | grep -woi "2")
 		if [[ -n $var ]] ; then
 			echo $i > $HOME/.clicked
-			cat $HOME/.clicked | sed -e 's/^ //g'
+			cat $HOME/.clicked | sed -e 's/^ //g' >/dev/null
 			if [[ -s $HOME/.clicked ]] ; then
 				eval $(xdotool getmouselocation --shell)
 				x_center=$X
@@ -67,16 +78,16 @@ circle()
 	unset STATE2
 	sleep 0.5
 	xclip -i /dev/null
-	STATE1=$(xinput --query-state 10 | grep 'button\[' | sort)
+	STATE1=$(xinput --query-state 12 | grep 'button\[' | sort)
 	while true; do
-		STATE2=$(xinput --query-state 10 | grep 'button\[' | sort)
+		STATE2=$(xinput --query-state 12 | grep 'button\[' | sort)
 		sleep 0.05
 		i=$(comm -13 <(echo "$STATE1") <(echo "$STATE2"))
 		STATE1=$STATE2
 		var=$(echo $i | grep -woi "2")
 		if [[ -n $var ]] ; then
 			echo $i > $HOME/.clicked
-		cat $HOME/.clicked | sed -e 's/^ //g'
+		cat $HOME/.clicked | sed -e 's/^ //g' >/dev/null
 			if [[ -s $HOME/.clicked ]] ; then
 				eval $(xdotool getmouselocation --shell)
 				break
@@ -85,19 +96,15 @@ circle()
 	done
 	rm -f $HOME/.clicked
 	maim -u -q $temp_screenshot
-	if [[ -s ~/Pictures/tmp.png ]] ; then	
+	if [[ -s $tempDir/tmp.png ]] ; then	
 		radius=$(bc <<<"sqrt(($X-$x_center)^2+($Y-$y_center)^2)")
 		convert $temp_screenshot -alpha on \( +clone -channel a -evaluate multiply 0 -draw "ellipse $x_center,$y_center $radius,$radius 0,360" \) -compose CopyOpacity -composite -trim "$output"
-		xclip -selection clipboard -t image/png -i ~/Pictures/tmp.png
-		size=`file ~/Pictures/tmp.png | awk {'print $5"x"$7'} | tr -d \,`
-		sxiv -b -s f -g $size $HOME/Pictures/tmp.png &
+		xclip -selection clipboard -t image/png -i $tempDir/tmp.png
+		size=`file $tempDir/tmp.png | awk {'print $5"x"$7'} | tr -d \,`
+		(set +m; sxiv -b -s f -g $size $tempDir/tmp.png 2>/dev/null &)
 		psSXIV=`pidof sxiv | awk '{print $1}'`
 		saveImage
-		if [ -n "$imageName" ]
-		then
-			mv $HOME/Pictures/tmp.png $HOME/Pictures/"$imageName" > /dev/null 2>&1
-		fi
-		kill $psSXIV > /dev/null 2>&1
+		kill $psSXIV 2>/dev/null
 	fi
 	screenshot
 }
@@ -105,36 +112,27 @@ circle()
 ## Fullscreen Selection ##
 
 fullscreen(){
-	maim -u -q ~/Pictures/tmp.png 
-	xclip -selection clipboard -t image/png -i ~/Pictures/tmp.png
-	size=`file ~/Pictures/tmp.png | awk {'print $5"x"$7'} | tr -d \,`
-	sxiv -b -s f -g $size $HOME/Pictures/tmp.png 2>/dev/null &
+	maim -u -q -d 0.3 $tempDir/tmp.png 
+	xclip -selection clipboard -t image/png -i $tempDir/tmp.png
+	size=`file $tempDir/tmp.png | awk {'print $5"x"$7'} | tr -d \,`
+	(set +m; sxiv -b -s f -g $size $tempDir/tmp.png 2>/dev/null &)
 	psSXIV=`pidof sxiv | awk '{print $1}'`
 	saveImage
-	if [ -n "$imageName" ]
-	then
-		mv $HOME/Pictures/tmp.png $HOME/Pictures/"$imageName" > /dev/null 2>&1
-	fi
-	kill $psSXIV > /dev/null 2>&1
+	kill $psSXIV 2>/dev/null
 	screenshot
 }
 
 ## Window or Selected Area ##
 
 selection(){
-	maim -s -u -b 2 -q -c 0,28,67,0.5 ~/Pictures/tmp.png
-	if [[ -s ~/Pictures/tmp.png ]] ; then	
-		xclip -selection clipboard -t image/png -i ~/Pictures/tmp.png
-		size=`file ~/Pictures/tmp.png | awk {'print $5"x"$7'} | tr -d \,`
-		sxiv -b -s f -g $size $HOME/Pictures/tmp.png &
+	maim -s -u -b 2 -q -c 0,28,67,0.5 $tempDir/tmp.png
+	if [[ -s $tempDir/tmp.png ]] ; then	
+		xclip -selection clipboard -t image/png -i $tempDir/tmp.png
+		size=`file $tempDir/tmp.png | awk {'print $5"x"$7'} | tr -d \,`
+		(set +m; sxiv -b -s f -g $size $tempDir/tmp.png 2>/dev/null &)
 		psSXIV=`pidof sxiv | awk '{print $1}'`
 		saveImage
-		if [ -n "$imageName" ]
-		then
-			mv $HOME/Pictures/tmp.png $HOME/Pictures/"$imageName" > /dev/null 2>&1
-
-		kill $psSXIV > /dev/null 2>&1
-		fi
+		kill $psSXIV 2>/dev/null
 	fi
 	screenshot
 }
@@ -153,24 +151,29 @@ screenshot(){
 
 	if [[ -d ~/Pictures ]]
 	then
-		if [[ $option == $fullscreen ]];
-		then
-			fullscreen
-		elif [[ $option == $selection ]];
-		then
-			selection
-		elif [[ $option == $cptoclip ]]
-		then
-			clipboard
-		elif [[ $option == $circular ]]
-		then	
-			circle
+		if [[ -d "$tempDir" ]] ; then
+			if [[ $option == $fullscreen ]];
+			then
+				fullscreen
+			elif [[ $option == $selection ]];
+			then
+				selection
+			elif [[ $option == $cptoclip ]]
+			then
+				clipboard
+			elif [[ $option == $circular ]]
+			then	
+				circle
+			else
+				echo "Option not selected"
+			fi
 		else
-			echo "Option not selected"
+			mkdir -p $tempDir
+			screenshot
 		fi
 	else
 		mkdir -p ~/Pictures
 		screenshot
 	fi
 }
-screenshot
+trap "screenshot ; rm -f $tempDir/* ; echo -e \"Program closed\"" EXIT
