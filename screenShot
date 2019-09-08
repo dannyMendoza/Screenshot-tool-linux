@@ -13,6 +13,12 @@
 # When you take a screnshot there is always a preview.
 # Even if you take a selected area or fullscreen screenshot, always remains in the clipboard.
 
+#comptonPS=$(pidof compton)
+
+#if [[ -n $comptonPS ]] ; then
+#	kill $comptonPS 2>/dev/null
+#fi
+
 title="DM Screenshot Tool"
 save="SaveImage"
 fullscreen="FullScreen"
@@ -29,13 +35,21 @@ trap "echo -e \"Exiting \n\"; rm -f $tempDir/*; exit 1" SIGINT SIGTERM SIGSTOP
 saveImage()
 {
 	si=$(zenity --entry --text "Save Image as:" --title "$save" 2>/dev/null)
-	imageName=`echo "${si}.png"`
+	imageName=$(echo "${si}.png")
 	cd $picDir
-	if [ ! -e "$imageName" ] && [ -n  "$si" ]
+	if [ -e "$imageName" ] 
 	then
-		mv $tempDir/tmp.png $picDir/"$imageName" >/dev/null 2>&1
-	else
-		echo "File Already Exist or no name was provided"
+		question=$(zenity --question --text "File already exist,\ndo you want to replace it?" --ellipsize 2>/dev/null)
+		ans=$?
+		if [[ $ans == 0 ]]
+		then
+			mv $tempDir/tmp.png $picDir/"$imageName" >/dev/null 2>&1
+		else
+			saveImage
+		fi
+	elif [[ -n $si ]] 
+	then
+		echo "No name was provided"
 	fi
 }
 
@@ -55,9 +69,9 @@ circle()
 	xclip -i /dev/null
 	output="$tempDir/tmp.png"
 	temp_screenshot="$tempDir/tmp.png"
-	STATE1=$(xinput --query-state 12 | grep 'button\[' | sort)
+	STATE1=$(xinput --query-state 10 | grep 'button\[' | sort)
 	while true; do
-		STATE2=$(xinput --query-state 12 | grep 'button\[' | sort)
+		STATE2=$(xinput --query-state 10 | grep 'button\[' | sort)
 		sleep 0.05
 		i=$(comm -13 <(echo "$STATE1") <(echo "$STATE2"))
 		STATE1=$STATE2
@@ -78,9 +92,9 @@ circle()
 	unset STATE2
 	sleep 0.5
 	xclip -i /dev/null
-	STATE1=$(xinput --query-state 12 | grep 'button\[' | sort)
+	STATE1=$(xinput --query-state 10 | grep 'button\[' | sort)
 	while true; do
-		STATE2=$(xinput --query-state 12 | grep 'button\[' | sort)
+		STATE2=$(xinput --query-state 10 | grep 'button\[' | sort)
 		sleep 0.05
 		i=$(comm -13 <(echo "$STATE1") <(echo "$STATE2"))
 		STATE1=$STATE2
@@ -95,7 +109,7 @@ circle()
 		fi
 	done
 	rm -f $HOME/.clicked
-	maim -u -q $temp_screenshot
+	maim -o -u -q $temp_screenshot
 	if [[ -s $tempDir/tmp.png ]] ; then	
 		radius=$(bc <<<"sqrt(($X-$x_center)^2+($Y-$y_center)^2)")
 		convert $temp_screenshot -alpha on \( +clone -channel a -evaluate multiply 0 -draw "ellipse $x_center,$y_center $radius,$radius 0,360" \) -compose CopyOpacity -composite -trim "$output"
@@ -112,7 +126,7 @@ circle()
 ## Fullscreen Selection ##
 
 fullscreen(){
-	maim -u -q -d 0.3 $tempDir/tmp.png 
+	maim -o -u -q -d 0.3 $tempDir/tmp.png 
 	xclip -selection clipboard -t image/png -i $tempDir/tmp.png
 	size=`file $tempDir/tmp.png | awk {'print $5"x"$7'} | tr -d \,`
 	(set +m; sxiv -b -s f -g $size $tempDir/tmp.png 2>/dev/null &)
@@ -125,7 +139,7 @@ fullscreen(){
 ## Window or Selected Area ##
 
 selection(){
-	maim -s -u -b 2 -q -c 0,28,67,0.5 $tempDir/tmp.png
+	maim -o -B -s -u -b 2 -q -c 0,28,67,0.5 $tempDir/tmp.png
 	if [[ -s $tempDir/tmp.png ]] ; then	
 		xclip -selection clipboard -t image/png -i $tempDir/tmp.png
 		size=`file $tempDir/tmp.png | awk {'print $5"x"$7'} | tr -d \,`
@@ -140,7 +154,7 @@ selection(){
 ## Copy to clipboard ##
 
 clipboard(){
-	maim -s -q -u -b 2 -c 0,75,100,0.6 --format png /dev/stdout | xclip -selection clipboard -t image/png
+	maim -o -s -q -u -b 2 -c 0,75,100,0.6 --format png /dev/stdout | xclip -selection clipboard -t image/png
 	screenshot
 }
 
@@ -149,9 +163,13 @@ clipboard(){
 screenshot(){
 	option=$(zenity --list --text "DM SCREENSHOT" --title "$title" --column="" --hide-header "$fullscreen" "$selection" "$circular" "$cptoclip" 2>/dev/null)
 
-	if [[ -d ~/Pictures ]]
+	if [[ ! -d ~/Pictures ]]
 	then
-		if [[ -d "$tempDir" ]] ; then
+		mkdir -p ~/Pictures
+	else
+		if [[ ! -d "$tempDir" ]] ; then
+			mkdir -p $tempDir
+		else
 			if [[ $option == $fullscreen ]];
 			then
 				fullscreen
@@ -167,13 +185,7 @@ screenshot(){
 			else
 				echo "Option not selected"
 			fi
-		else
-			mkdir -p $tempDir
-			screenshot
 		fi
-	else
-		mkdir -p ~/Pictures
-		screenshot
 	fi
 }
 trap "screenshot ; rm -f $tempDir/* ; echo -e \"Program closed\"" EXIT
