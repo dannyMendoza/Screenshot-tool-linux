@@ -13,12 +13,6 @@
 # When you take a screnshot there is always a preview.
 # Even if you take a selected area or fullscreen screenshot, always remains in the clipboard.
 
-#comptonPS=$(pidof compton)
-
-#if [[ -n $comptonPS ]] ; then
-#	kill $comptonPS 2>/dev/null
-#fi
-
 title="DM Screenshot Tool"
 save="SaveImage"
 fullscreen="FullScreen"
@@ -47,9 +41,11 @@ saveImage()
 		else
 			saveImage
 		fi
-	elif [[ -n $si ]] 
+	elif [[ -z $si ]] 
 	then
 		echo "No name was provided"
+	else
+		mv $tempDir/tmp.png $picDir/"$imageName" >/dev/null 2>&1
 	fi
 }
 
